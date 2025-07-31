@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>滴水水缸 Demo</title>
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: "微软雅黑", sans-serif;
+      padding: 30px;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+    }
+
+    .tank {
+      position: relative;
+      width: 120px;
+      height: 200px;
+      border: 4px solid #888;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+      margin: 15px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+
+    .tank:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+
+    .water {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(to top, #4fc3f7 0%, #81d4fa 100%);
+      transition: height 0.3s ease;
+    }
+
+    .drop {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #4fc3f7;
+      animation: drop 1s infinite;
+      z-index: 10;
+    }
+
+    .controls {
+      margin: 20px auto;
+      text-align: center;
+    }
+
+    #createTankBtn {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+
+    #createTankBtn:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .sell-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      padding: 3px 6px;
+      font-size: 12px;
+      background-color: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .sell-btn:disabled {
+      background-color: #ffaaaa;
+      cursor: not-allowed;
+    }
+
+    .tank-quality {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+      z-index: 10; /* 确保品质标签显示在水面之上 */
+      padding: 2px 4px;
+      border-radius: 3px;
+      background-color: rgba(0,0,0,0.5);
+    }
+
+    /* 品质样式与发光效果 */
+    .tank.black-iron { border-color: #555555; box-shadow: 0 0 5px #555555; }
+    .tank.bronze { border-color: #cd7f32; box-shadow: 0 0 8px #cd7f32; }
+    .tank.silver { border-color: #c0c0c0; box-shadow: 0 0 8px #c0c0c0; }
+    .tank.gold { border-color: #ffd700; box-shadow: 0 0 10px #ffd700; }
+    .tank.platinum { border-color: #e5e4e2; box-shadow: 0 0 10px #e5e4e2; }
+    .tank.emerald { border-color: #50c878; box-shadow: 0 0 12px #50c878; }
+    .tank.diamond { border-color: #b9f2ff; box-shadow: 0 0 12px #b9f2ff; }
+    .tank.master { border-color: #9966cc; box-shadow: 0 0 15px #9966cc; }
+    .tank.grandmaster { border-color: #ff4500; box-shadow: 0 0 15px #ff4500; }
+    .tank.challenger { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+    {background-color: #4fc3f7;
+      animation: drop 1s infinite;
+      z-index: 10;
+    }
+
+    @keyframes drop {
+      0% { top: -20px; opacity: 1; }
+      80% { top: 220px; opacity: 0.5; }
+      100% { top: 220px; opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>💧 滴水装水缸 Demo</h1>
+  <div class="controls">
+    <button id="createTankBtn">生成水缸</button>
+    <div>总资产: <span id="money">0</span> 金币</div>
+  </div>
+  <div class="container" id="container"></div>
+
+  <script>
+    const container = document.getElementById('container');
+    const createBtn = document.getElementById('createTankBtn');
+    const moneyDisplay = document.getElementById('money');
+    let currentTanks = 0;
+    const maxTanks = 5;
+    let canCreate = true;
+    let money = localStorage.getItem('tankGameMoney') || 0;
+    moneyDisplay.textContent = money;
+    let tankIntervals = []; // 用于存储所有水缸的定时器
+
+    // 添加水缸状态检查函数
+    function checkCreateButtonStatus() {
+      // 如果已有5个水缸，禁用创建按钮
+      if (currentTanks >= maxTanks) {
+        canCreate = false;
+        createBtn.disabled = true;
+        return;
+      }
+
+      // 如果没有水缸，允许创建
+      if (currentTanks === 0) {
+        canCreate = true;
+        createBtn.disabled = false;
+        return;
+      }
+
+      // 检查是否所有水缸都已满
+      const tanks = Array.from(container.children);
+      const allFull = tanks.every(tank => {
+        const water = tank.querySelector('.water');
+        const percent = parseFloat(water.style.height) || 0;
+        return percent >= 100;
+      });
+
+      // 只有所有水缸都满了才允许创建新的
+      canCreate = allFull;
+      createBtn.disabled = !allFull;
+    }
+
+    // 水缸品质配置：名称、容量(滴)、价格(金币)、概率、样式类
+    const tankQualities = [
+      { name: '黑铁', capacity: 60, price: 1, probability: 0.50, className: 'black-iron' },
+      { name: '青铜', capacity: 120, price: 5, probability: 0.20, className: 'bronze' },
+      { name: '白银', capacity: 200, price: 10, probability: 0.10, className: 'silver' },
+      { name: '黄金', capacity: 320, price: 15, probability: 0.08, className: 'gold' },
+      { name: '铂金', capacity: 480, price: 20, probability: 0.06, className: 'platinum' },
+      { name: '翡翠', capacity: 640, price: 50, probability: 0.02, className: 'emerald' },
+      { name: '钻石', capacity: 810, price: 100, probability: 0.018, className: 'diamond' },
+      { name: '大师', capacity: 1000, price: 500, probability: 0.012, className: 'master' },
+      { name: '宗师', capacity: 1400, price: 1000, probability: 0.007, className: 'grandmaster' },
+      { name: '王者', capacity: 1800, price: 1000000, probability: 0.003, className: 'challenger' }
+    ];
+
+    // 保存所有水缸状态到localStorage
+    function saveTanksToLocalStorage() {
+      const tanksData = Array.from(container.children).map((tank) => {
+        const qualityClass = tank.className.split(' ')[1];
+        const quality = tankQualities.find(q => q.className === qualityClass);
+        const water = tank.querySelector('.water');
+        const percent = parseFloat(water.style.height);
+        const drops = Math.round((percent / 100) * quality.capacity);
+
+        return {
+          qualityIndex: tankQualities.indexOf(quality),
+          drops: drops,
+          lastUpdateTime: Date.now() // 保存最后更新时间而非开始时间
+        };
+      });
+      localStorage.setItem('tankGameTanks', JSON.stringify(tanksData));
+    }
+
+    // 从localStorage加载水缸状态
+    function loadTanksFromLocalStorage() {
+      const savedTanks = localStorage.getItem('tankGameTanks');
+      if (!savedTanks) return [];
+
+      try {
+        return JSON.parse(savedTanks);
+      } catch (e) {
+        console.error('Failed to parse saved tanks:', e);
+        localStorage.removeItem('tankGameTanks'); // 移除损坏的数据
+        return [];
+      }
+    }
+
+    // 根据概率随机选择水缸品质
+    function getRandomQuality() {
+      const random = Math.random();
+      let cumulativeProbability = 0;
+      for (const quality of tankQualities) {
+        cumulativeProbability += quality.probability;
+        if (random < cumulativeProbability) {
+          return quality;
+        }
+      }
+      return tankQualities[0]; // 默认返回最低品质
+    }
+
+    // 创建水缸 - 新增参数: isLoadMode(加载模式)
+    function createTank(initialDrops = 0, quality = null, isLoadMode = false) {
+      if (currentTanks >= maxTanks && !isLoadMode) return; // 加载模式不受创建限制
+
+      // 只有用户主动创建时才消耗创建机会
+      if (!isLoadMode) {
+        canCreate = false;
+        createBtn.disabled = true;
+      }
+      currentTanks++;
+
+      // 获取品质 - 如果未指定则随机
+      const tankQuality = quality || getRandomQuality();
+
+      // 创建水缸元素
+      const tank = document.createElement('div');
+      tank.className = `tank ${tankQuality.className}`;
+
+      // 品质标签
+      const qualityLabel = document.createElement('div');
+      qualityLabel.className = 'tank-quality';
+      qualityLabel.textContent = tankQuality.name;
+
+      // 水元素
+      const water = document.createElement('div');
+      water.className = 'water';
+      const initialPercent = initialDrops > 0 ? Math.min((initialDrops / tankQuality.capacity) * 100, 100) : 0;
+      water.style.height = initialPercent + '%';
+
+      const drop = document.createElement('div');
+      drop.className = 'drop';
+
+      const sellBtn = document.createElement('button');
+      sellBtn.className = 'sell-btn';
+      sellBtn.textContent = '出售';
+      sellBtn.disabled = initialPercent < 100;
+
+      // 组装水缸
+      tank.appendChild(qualityLabel);
+      tank.appendChild(water);
+      tank.appendChild(drop);
+      tank.appendChild(sellBtn);
+      container.appendChild(tank);
+
+      // 装水逻辑
+      let drops = initialDrops;
+      let lastUpdateTime = Date.now();
+      let requestId;
+      
+      // 初始状态检查 - 如果已经满了，直接隐藏水滴
+      if (initialDrops >= tankQuality.capacity) {
+        drop.style.display = 'none';
+      }
+      
+      function updateDrops() {
+        const now = Date.now();
+        const elapsedSeconds = Math.floor((now - lastUpdateTime) / 1000);
+        
+        if (elapsedSeconds > 0) {
+          drops += elapsedSeconds;
+          lastUpdateTime = now;
+          
+          const percent = Math.min((drops / tankQuality.capacity) * 100, 100);
+          water.style.height = percent + '%';
+          tank.dataset.lastUpdateTime = now.toString();
+          
+          // 定期保存状态
+          if (drops % 5 === 0) {
+            saveTanksToLocalStorage();
+          }
+          
+          // 装满水时启用出售按钮
+          if (drops >= tankQuality.capacity) {
+            // 关键修复：使用cancelAnimationFrame代替clearInterval
+            cancelAnimationFrame(requestId);
+            sellBtn.disabled = false;
+            // 隐藏水滴元素
+            drop.style.display = 'none';
+            saveTanksToLocalStorage();
+            // 检查是否可以创建新水缸
+            checkCreateButtonStatus();
+            return; // 确保不再继续执行
+          }
+        }
+        
+        requestId = requestAnimationFrame(updateDrops);
+      }
+      
+      requestId = requestAnimationFrame(updateDrops);
+      
+      // 保存动画帧ID以便清理
+      tankIntervals.push(requestId);
+
+      // 出售功能
+      sellBtn.addEventListener('click', () => {
+        // 更新金钱
+        money = parseInt(money) + tankQuality.price;
+        moneyDisplay.textContent = money;
+        localStorage.setItem('tankGameMoney', money);
+
+        // 从DOM中移除水缸
+        container.removeChild(tank);
+        currentTanks--;
+
+        // 清除定时器
+        const intervalIndex = tankIntervals.indexOf(interval);
+        if (intervalIndex !== -1) {
+          clearInterval(tankIntervals[intervalIndex]);
+          tankIntervals.splice(intervalIndex, 1);
+        }
+
+        // 允许创建新水缸
+        checkCreateButtonStatus();
+
+        // 保存状态
+        saveTanksToLocalStorage();
+      });
+
+      // 初始保存
+      saveTanksToLocalStorage();
+      return tank;
+    }
+
+    // 页面加载时恢复水缸
+    window.addEventListener('load', () => {
+      const savedTanks = loadTanksFromLocalStorage();
+      if (savedTanks.length > 0) {
+        // 恢复保存的水缸
+        savedTanks.forEach(tankData => {
+          const quality = tankQualities[tankData.qualityIndex];
+          if (!quality) return; // 无效品质数据跳过
+
+          // 计算从上次更新到现在应该增加的水滴数
+          const elapsedSeconds = Math.floor((Date.now() - tankData.lastUpdateTime) / 1000);
+          let currentDrops = tankData.drops + elapsedSeconds;
+
+          // 确保水滴数不超过水缸容量
+          currentDrops = Math.min(currentDrops, quality.capacity);
+
+          // 使用加载模式创建水缸
+          createTank(currentDrops, quality, true);
+        });
+
+        // 恢复完成后检查创建按钮状态
+        setTimeout(() => {
+          checkCreateButtonStatus();
+        }, 100);
+      } else {
+        // 初始状态：如果没有水缸，允许立即创建
+        checkCreateButtonStatus();
+      }
+    });
+
+    // 页面关闭前保存状态
+    window.addEventListener('beforeunload', () => {
+      saveTanksToLocalStorage();
+      // 清除所有动画帧
+      tankIntervals.forEach(id => cancelAnimationFrame(id));
+    });
+    
+    // 监听页面可见性变化
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        // 页面变为可见时更新所有水缸
+        const now = Date.now();
+        Array.from(container.children).forEach(tank => {
+          const qualityClass = tank.className.split(' ')[1];
+          const quality = tankQualities.find(q => q.className === qualityClass);
+          const water = tank.querySelector('.water');
+          const sellBtn = tank.querySelector('.sell-btn');
+          
+          if (sellBtn.disabled) {
+            const lastUpdate = parseInt(tank.dataset.lastUpdateTime || Date.now());
+            const elapsedSeconds = Math.floor((now - lastUpdate) / 1000);
+            
+            if (elapsedSeconds > 0) {
+              let currentDrops = Math.round((parseFloat(water.style.height) / 100) * quality.capacity);
+              currentDrops += elapsedSeconds;
+              
+              const percent = Math.min((currentDrops / quality.capacity) * 100, 100);
+              water.style.height = percent + '%';
+              tank.dataset.lastUpdateTime = now.toString();
+              
+              if (currentDrops >= quality.capacity) {
+                sellBtn.disabled = false;
+                checkCreateButtonStatus();
+              }
+            }
+          }
+        });
+        saveTanksToLocalStorage();
+      }
+    });
+
+    // 创建按钮点击事件
+    createBtn.addEventListener('click', () => createTank());
+
+    // 数据库保存函数(需要后端支持)
+    function saveToDatabase(money) {
+      // 实际项目中需要实现此函数
+      // fetch('/api/save-money', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ money: money })
+      // });
+    }
+  </script>
+</body>
+</html>
