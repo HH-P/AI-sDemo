@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>炸弹倒数计数器</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            color: white;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            color: #ff4757;
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        }
+
+        .timer-container {
+            background-color: #2d2d2d;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .time-display {
+            font-size: 5rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            color: #ff4757;
+            text-shadow: 0 0 15px rgba(255, 71, 87, 0.7);
+        }
+
+        .time-input {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .time-input input {
+            width: 80px;
+            padding: 0.8rem;
+            font-size: 1.2rem;
+            text-align: center;
+            border: 2px solid #444;
+            border-radius: 5px;
+            background-color: #333;
+            color: white;
+        }
+
+        .time-input label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #startBtn {
+            background-color: #2ed573;
+            color: white;
+        }
+
+        #startBtn:hover {
+            background-color: #27ae60;
+        }
+
+        #resetBtn {
+            background-color: #747d8c;
+            color: white;
+        }
+
+        #resetBtn:hover {
+            background-color: #57606f;
+        }
+
+        #explosion {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .explosion-effect {
+            width: 300px;
+            height: 300px;
+            position: relative;
+        }
+
+        .explosion-particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ff4757;
+            opacity: 0;
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5) translateY(var(--y)) translateX(var(--x));
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>炸弹倒数计数器</h1>
+    
+    <div class="timer-container">
+        <div class="time-display" id="timeDisplay">00:00:00</div>
+        
+        <div class="time-input">
+            <div class="input-group">
+                <label for="hours">小时</label>
+                <input type="number" id="hours" min="0" max="23" value="0">
+            </div>
+            <div class="input-group">
+                <label for="minutes">分钟</label>
+                <input type="number" id="minutes" min="0" max="59" value="0">
+            </div>
+            <div class="input-group">
+                <label for="seconds">秒</label>
+                <input type="number" id="seconds" min="0" max="59" value="10">
+            </div>
+        </div>
+        
+        <div class="buttons">
+            <button id="startBtn">开始</button>
+            <button id="resetBtn">重置</button>
+        </div>
+    </div>
+    
+    <div id="explosion">
+        <div class="explosion-effect" id="explosionEffect"></div>
+    </div>
+
+    <audio id="explosionSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-explosion-impact-1699.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // 获取DOM元素
+        const timeDisplay = document.getElementById('timeDisplay');
+        const hoursInput = document.getElementById('hours');
+        const minutesInput = document.getElementById('minutes');
+        const secondsInput = document.getElementById('seconds');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const explosion = document.getElementById('explosion');
+        const explosionEffect = document.getElementById('explosionEffect');
+        const explosionSound = document.getElementById('explosionSound');
+
+        // 计时器状态变量
+        let timer;
+        let totalSeconds = 0;
+        let isRunning = false;
+
+        // 更新时间显示
+        function updateTimeDisplay() {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            timeDisplay.textContent = `${formatTime(hours)}:${formatTime(minutes)}:${formatTime(seconds)}`;
+        }
+
+        // 格式化时间（补零）
+        function formatTime(time) {
+            return time.toString().padStart(2, '0');
+        }
+
+        // 开始/暂停计时器
+        function toggleTimer() {
+            if (isRunning) {
+                // 暂停计时器
+                clearInterval(timer);
+                startBtn.textContent = '继续';
+            } else {
+                // 开始计时器
+                if (totalSeconds === 0) {
+                    // 如果是第一次开始，从输入获取时间
+                    const hours = parseInt(hoursInput.value) || 0;
+                    const minutes = parseInt(minutesInput.value) || 0;
+                    const seconds = parseInt(secondsInput.value) || 0;
+                    totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                    
+                    // 如果时间为0，不启动计时器
+                    if (totalSeconds === 0) return;
+                }
+                
+                timer = setInterval(() => {
+                    totalSeconds--;
+                    updateTimeDisplay();
+                    
+                    if (totalSeconds <= 0) {
+                        clearInterval(timer);
+                        isRunning = false;
+                        startBtn.textContent = '开始';
+                        triggerExplosion();
+                    }
+                }, 1000);
+                
+                startBtn.textContent = '暂停';
+            }
+            
+            isRunning = !isRunning;
+        }
+
+        // 重置计时器
+        function resetTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            totalSeconds = 0;
+            updateTimeDisplay();
+            startBtn.textContent = '开始';
+            explosion.style.display = 'none';
+        }
+
+        // 触发爆炸效果
+        function triggerExplosion() {
+            // 播放爆炸音效
+            explosionSound.play();
+            
+            // 显示爆炸效果
+            explosion.style.display = 'flex';
+            
+            // 创建爆炸粒子
+            createExplosionParticles();
+            
+            // 3秒后隐藏爆炸效果
+            setTimeout(() => {
+                explosion.style.display = 'none';
+                // 清除爆炸粒子
+                while (explosionEffect.firstChild) {
+                    explosionEffect.removeChild(explosionEffect.firstChild);
+                }
+            }, 3000);
+        }
+
+        // 创建爆炸粒子
+        function createExplosionParticles() {
+            const particleCount = 150;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('explosion-particle');
+                
+                // 随机位置和颜色
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 150;
+                const size = Math.random() * 10 + 5;
+                
+                // 设置粒子样式
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.backgroundColor = `hsl(${Math.random() * 60 + 30}, 100%, 50%)`;
+                particle.style.setProperty('--x', `${Math.cos(angle) * distance}px`);
+                particle.style.setProperty('--y', `${Math.sin(angle) * distance}px`);
+                particle.style.animation = `explode 1.5s ease-out forwards`;
+                particle.style.animationDelay = `${Math.random() * 0.5}s`;
+                
+                explosionEffect.appendChild(particle);
+            }
+        }
+
+        // 事件监听
+        startBtn.addEventListener('click', toggleTimer);
+        resetBtn.addEventListener('click', resetTimer);
+
+        // 初始化时间显示
+        updateTimeDisplay();
+    </script>
+</body>
+</html>
